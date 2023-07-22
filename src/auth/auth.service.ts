@@ -32,8 +32,8 @@ export class AuthService {
 		const tokens = await this.issueTokens(user.id)
 
 		return {
-			user: this.returnUserFields,
-			tokens
+			user: this.returnUserFields(user),
+			...tokens
 		}
 	}
 
