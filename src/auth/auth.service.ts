@@ -1,9 +1,16 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import {
+	BadRequestException,
+	Injectable,
+	NotFoundException,
+	UnauthorizedException
+} from '@nestjs/common'
 import { faker } from '@faker-js/faker'
 import { PrismaService } from 'src/prisma.service'
-import { AuthDto } from './auth.dto'
+import { AuthDto } from './dto/auth.dto'
 import { JwtService } from '@nestjs/jwt'
 import { User } from '@prisma/client'
+import { RefreshTokenDto } from './dto/refresh-token.dto'
+import { hash, verify } from 'argon2'
 
 @Injectable()
 export class AuthService {
@@ -11,6 +18,34 @@ export class AuthService {
 		private prismaService: PrismaService,
 		private jwtService: JwtService
 	) {}
+
+	async login(dto: AuthDto) {
+		const user = await this.validateUser(dto)
+
+		const tokens = await this.issueTokens(user.id)
+
+		return {
+			user: this.returnUserFields(user),
+			...tokens
+		}
+	}
+
+	async getNewTokens(dto: RefreshTokenDto) {
+		const result = await this.jwtService.verifyAsync(dto.refreshToken)
+		if (!result)
+			throw new UnauthorizedException('Недопустимый токен обновления')
+
+		const user = await this.prismaService.user.findUnique({
+			where: { id: result.id }
+		})
+
+		const tokens = await this.issueTokens(user.id)
+
+		return {
+			user: this.returnUserFields(user),
+			...tokens
+		}
+	}
 
 	async register(dto: AuthDto) {
 		const oldUser = await this.prismaService.user.findUnique({
@@ -25,7 +60,7 @@ export class AuthService {
 				name: faker.person.firstName(),
 				avatarPath: faker.image.avatar(),
 				phone: faker.phone.number('+7 (###) ###-##-##'),
-				password: faker.internet.password()
+				password: await hash(dto.password)
 			}
 		})
 
@@ -56,5 +91,17 @@ export class AuthService {
 			id: user.id,
 			email: user.email
 		}
+	}
+
+	private async validateUser(dto: AuthDto) {
+		const user = await this.prismaService.user.findUnique({
+			where: { email: dto.email }
+		})
+		if (!user) throw new NotFoundException('Пользователь не найден')
+
+		const isValid = await verify(user.password, dto.password)
+		if (!isValid) throw new UnauthorizedException('Пароль неправильный')
+
+		return user
 	}
 }
