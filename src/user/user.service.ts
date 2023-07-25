@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from 'src/prisma.service'
 import { returnUserObject } from './return-user.object'
 import { Prisma } from '@prisma/client'
+import { UserDto } from './user.dto'
+import { hash } from 'argon2'
 
 @Injectable()
 export class UserService {
@@ -30,5 +32,29 @@ export class UserService {
 		}
 
 		return user
+	}
+
+	async updateProfile(id: number, dto: UserDto) {
+		const isSameUser = await this.prismaService.user.findUnique({
+			where: { email: dto.email }
+		})
+
+		if (isSameUser && id !== isSameUser.id)
+			throw new BadRequestException('Email уже используется')
+
+		const user = await this.byId(id)
+
+		return this.prismaService.user.update({
+			where: {
+				id
+			},
+			data: {
+				email: dto.email,
+				name: dto.name,
+				avatarPath: dto.avatarPath,
+				phone: dto.email,
+				password: dto.password ? await hash(dto.password) : user.password
+			}
+		})
 	}
 }
