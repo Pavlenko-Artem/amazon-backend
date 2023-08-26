@@ -32,7 +32,7 @@ export class UserService {
 		})
 
 		if (!user) {
-			throw new Error('Пользователь не найден')
+			throw new NotFoundException('Пользователь не найден')
 		}
 
 		return user
